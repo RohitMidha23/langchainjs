@@ -14,6 +14,7 @@ import {
 import {
   InputValues,
   MemoryVariables,
+  OutputValues,
   getBufferString,
   getPromptInputKey,
 } from "./base.js";
@@ -99,66 +100,65 @@ export class EntityMemory extends BaseChatMemory implements EntityMemoryInput {
       llm: this.llm,
       prompt: this.entityExtractionPrompt,
     });
-    const prompt_input_key =
+    const promptInputKey =
       this.inputKey ?? getPromptInputKey(inputs, this.memoryVariables);
-    const buffer_string = getBufferString(
+    const bufferString = getBufferString(
       this.buffer.slice(-this.k * 2),
       this.humanPrefix,
       this.aiPrefix
     );
     const output = await chain.predict({
-      history: buffer_string,
-      input: inputs[prompt_input_key],
+      history: bufferString,
+      input: inputs[promptInputKey],
     });
     const entities: string[] =
       output.trim() === "NONE" ? [] : output.split(",").map((w) => w.trim());
-    const entity_summaries: { [key: string]: string | undefined } = {};
+    const entitySummaries: { [key: string]: string | undefined } = {};
 
     for (const entity of entities) {
-      entity_summaries[entity] = await this.entityStore.get(entity, "");
+      entitySummaries[entity] = await this.entityStore.get(entity, "");
     }
     this.entityCache = [...entities];
     const buffer = this.returnMessages
       ? this.buffer.slice(-this.k * 2)
-      : buffer_string;
+      : bufferString;
 
     return {
       [this.chatHistoryKey]: buffer,
-      [this.entitiesKey]: entity_summaries,
+      [this.entitiesKey]: entitySummaries,
     };
   }
 
-  async saveContext(
-    inputs: Record<string, unknown>,
-    outputs: Record<string, unknown>
-  ): Promise<void> {
+  // Save context from this conversation to buffer.
+  async saveContext(inputs: InputValues, outputs: OutputValues): Promise<void> {
     await super.saveContext(inputs, outputs);
 
     const promptInputKey =
       this.inputKey ?? getPromptInputKey(inputs, this.memoryVariables);
-    const buffer_string = getBufferString(
+    const bufferString = getBufferString(
       this.buffer.slice(-this.k * 2),
       this.humanPrefix,
       this.aiPrefix
     );
-    const input_data = inputs[promptInputKey];
+    const inputData = inputs[promptInputKey];
     const chain = new LLMChain({
       llm: this.llm,
       prompt: this.entitySummarizationPrompt,
     });
 
     for (const entity of this.entityCache) {
-      const existing_summary = this.entityStore.get(entity, "");
+      const existingSummary = this.entityStore.get(entity, "");
       const output = await chain.predict({
-        summary: existing_summary,
+        summary: existingSummary,
         entity,
-        history: buffer_string,
-        input: input_data,
+        history: bufferString,
+        input: inputData,
       });
       this.entityStore.set(entity, output.trim());
     }
   }
 
+  // Clear memory contents.
   clear(): void {
     this.chatHistory = new ChatMessageHistory();
     this.entityStore = new InMemoryEntityStore();
