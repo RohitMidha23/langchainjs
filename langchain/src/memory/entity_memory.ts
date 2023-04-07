@@ -1,5 +1,5 @@
 import { BaseLanguageModel } from "base_language/index.js";
-import { BasePromptTemplate, LLMChain } from "index.js";
+import { BasePromptTemplate, LLMChain, PromptTemplate } from "index.js";
 import { BaseChatMessage } from "../schema/index.js";
 
 import {
@@ -58,14 +58,15 @@ export interface EntityMemoryInput extends BaseMemoryInput {
   humanPrefix: string;
   aiPrefix: string;
   llm: BaseLanguageModel;
-  entityExtractionPrompt: BasePromptTemplate;
-  entitySummarizationPrompt: BasePromptTemplate;
+  entityExtractionPrompt: PromptTemplate;
+  entitySummarizationPrompt: PromptTemplate;
   entityCache: string[];
   k: number;
   chatHistoryKey: string;
-  entityStore: BaseEntityStore;
+  entityStore: InMemoryEntityStore;
 }
 
+// Entity extractor & summarizer to memory.
 export class EntityMemory extends BaseChatMemory implements EntityMemoryInput {
   humanPrefix = "Human";
 
@@ -87,14 +88,37 @@ export class EntityMemory extends BaseChatMemory implements EntityMemoryInput {
 
   entitiesKey = "entities";
 
+  constructor(fields?: Partial<EntityMemoryInput>) {
+    super({
+      chatHistory: fields?.chatHistory,
+      returnMessages: fields?.returnMessages ?? false,
+      inputKey: fields?.inputKey,
+      outputKey: fields?.outputKey,
+    });
+    this.humanPrefix = fields?.humanPrefix ?? this.humanPrefix;
+    this.aiPrefix = fields?.aiPrefix ?? this.aiPrefix;
+    this.chatHistoryKey = fields?.chatHistoryKey ?? this.chatHistoryKey;
+    this.llm = fields?.llm ?? this.llm;
+    this.entityExtractionPrompt =
+      fields?.entityExtractionPrompt ?? this.entityExtractionPrompt;
+    this.entityExtractionPrompt =
+      fields?.entitySummarizationPrompt ?? this.entitySummarizationPrompt;
+    this.entityStore =
+      fields?.entityStore ?? (this.entityStore as InMemoryEntityStore);
+    this.entityCache = fields?.entityCache ?? this.entityCache;
+    this.k = fields?.k ?? this.k;
+  }
+
   get buffer(): BaseChatMessage[] {
     return this.chatHistory.messages;
   }
 
+  // Will always return list of memory variables.
   get memoryVariables(): string[] {
     return [this.entitiesKey, this.chatHistoryKey];
   }
 
+  // Return history buffer.
   async loadMemoryVariables(inputs: InputValues): Promise<MemoryVariables> {
     const chain = new LLMChain({
       llm: this.llm,
