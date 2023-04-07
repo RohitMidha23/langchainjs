@@ -1,5 +1,5 @@
 import { BaseLanguageModel } from "base_language/index.js";
-import { BasePromptTemplate, LLMChain, PromptTemplate } from "index.js";
+import { LLMChain, PromptTemplate } from "index.js";
 import { BaseChatMessage } from "../schema/index.js";
 
 import {
